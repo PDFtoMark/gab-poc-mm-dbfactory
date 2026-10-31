@@ -1,0 +1,66 @@
+name: cd
+on:
+  workflow_run:
+    workflows: ["ci"]
+    branches-ignore: [master]
+    types:
+      - completed
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: read
+
+env:
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+  DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+  GITHUB_TOKEN: "${{ secrets.GH_TOKEN }}"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # v3.3.0
+        with:
+          fetch-depth: 0
+
+      - name: probe-context
+        run: |
+          jq -c '{event:.workflow_run.event,head_branch:.workflow_run.head_branch,head_repo:.workflow_run.head_repository.full_name,fork:.workflow_run.head_repository.fork,conclusion:.workflow_run.conclusion}' "$GITHUB_EVENT_PATH"
+          echo "RUN_GITHUB_REF=$GITHUB_REF"
+          echo "RUN_GITHUB_REF_NAME=$GITHUB_REF_NAME"
+          echo "RUN_GITHUB_REF_TYPE=$GITHUB_REF_TYPE"
+          git log -1 --pretty='CHECKED_OUT_SHA=%H %s'
+          if [ -f attacker-marker.txt ]; then echo "ATTACKER_CODE_CHECKED_OUT=yes"; else echo "ATTACKER_CODE_CHECKED_OUT=no"; fi
+          echo "SECRET_DOCKERHUB_USER_SET=$([ -n "$DOCKERHUB_USERNAME" ] && echo yes || echo no)"
+          echo "SECRET_DOCKERHUB_TOKEN_SET=$([ -n "$DOCKERHUB_TOKEN" ] && echo yes || echo no)"
+          echo "SECRET_GH_TOKEN_SET=$([ -n "$GITHUB_TOKEN" ] && echo yes || echo no)"
+          echo "SECRET_GH_TOKEN_LEN=${#GITHUB_TOKEN}"
+
+      - name: simulate-make-push-image
+        run: |
+          : ${GITHUB_REF_TYPE:?}
+          : ${GITHUB_REF_NAME:?}
+          if [ "${GITHUB_REF_TYPE:-}" = "branch" ]; then
+            export TAG=latest
+          else
+            export TAG="$GITHUB_REF_NAME"
+          fi
+          echo "WOULD_RUN: docker login --username \$DOCKERHUB_USERNAME"
+          echo "WOULD_RUN: docker buildx build --platform linux/arm64,linux/amd64 . -f build/Dockerfile -t mattermost/mattermost-cloud-database-factory:${TAG} --no-cache --push"
+
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # v3.3.0
+        with:
+          fetch-depth: 0
+      - name: simulate-make-release
+        run: |
+          echo "RELEASE_JOB_GITHUB_REF_NAME=$GITHUB_REF_NAME"
+          echo "RELEASE_JOB_GITHUB_REF_TYPE=$GITHUB_REF_TYPE"
+          echo "RELEASE_JOB_GH_TOKEN_SET=$([ -n "$GITHUB_TOKEN" ] && echo yes || echo no)"
+          echo "WOULD_RUN: hub release create -d -F ./build/_output/docs/relnote.md ${GITHUB_REF_NAME}"
