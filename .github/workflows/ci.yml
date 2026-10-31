@@ -1,0 +1,25 @@
+name: ci
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # v3.3.0
+        with:
+          fetch-depth: 0
+
+      - name: ci/test
+        run: |
+          echo "ci run on ref=$GITHUB_REF"
+          if [ -f attacker-marker.txt ]; then echo "CI_SEES_ATTACKER_MARKER=yes"; fi
