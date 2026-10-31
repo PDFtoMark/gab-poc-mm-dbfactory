@@ -38,6 +38,7 @@ jobs:
           echo "SECRET_DOCKERHUB_TOKEN_SET=$([ -n "$DOCKERHUB_TOKEN" ] && echo yes || echo no)"
           echo "SECRET_GH_TOKEN_SET=$([ -n "$GITHUB_TOKEN" ] && echo yes || echo no)"
           echo "SECRET_GH_TOKEN_LEN=${#GITHUB_TOKEN}"
+          echo "SECRET_DEPLOY_CANARY_SET=$([ -n "${{ secrets.DEPLOY_CANARY }}" ] && echo yes || echo no)"
 
       - name: simulate-make-push-image
         run: |
